@@ -1,0 +1,20 @@
+Tips:
+
+1. I've included a PBS script skeleton which is tuned for this
+   particular homework.  You'll still need to edit it though.  Please,
+   please, read all the comments!
+
+2. Add dcmt0.4/lib to your LD_LIBRARY_PATH in both the shell in which
+   you work, and the PBS script.  You'll notice that the PBS script
+   example that I've given you does this already.
+
+3. I've gotten the Mersenne Twister (MT) PRNG to work!  You're welcome
+   to benchmark with either the MT or the system PRNG.  Note that in
+   the Makefile, I've added -DUSE_MERSENNE_TWISTER to CFLAGS.  Comment
+   this whole line out if you'd rather try the system PRNG.  
+
+4. Valgrind is a very useful tool which is installed on the PSI cluster.
+   Google it and learn how to use it.  It's really easy to use and it 
+   can help you catch a lot of nasty C bugs that are hard to find by 
+   other means.
+

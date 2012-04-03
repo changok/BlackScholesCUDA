@@ -1,0 +1,42 @@
+# Makefile.include
+# Platform-dependent settings for HW1
+#
+# Revised (mfh 08 Sep 2007) to make libdcmt into a dynamic library.
+# We include some switches so this works on MacOS X as well as Linux.
+#####################################################################
+
+# Switch to "linux" if you are on Linux.  (You need the quotes.)
+#PLATFORM="linux"
+PLATFORM="mac"
+
+ifeq ($(PLATFORM),"mac")
+     CC = gcc
+     LINKER = gcc
+     LD_SHARED_FLAG = -dynamiclib
+     DYLIB_SUFFIX=dylib
+else
+     CC = icc
+     LINKER = icc
+     # This flag tells the linker to make a shared library
+     # instead of an executable.
+     LD_SHARED_FLAG = -shared
+     # Different operating systems use different file extensions
+     # for shared libraries.  Linux uses .so, MacOS X uses .dylib,
+     # Cygwin (running on Windows) uses .dll (I think?), and AIX
+     # uses .o (I think?).  This is the extension for Linux.  We
+     # don't put the dot here.
+     DYLIB_SUFFIX=so
+endif
+
+COPTFLAGS = -O2
+#COPTFLAGS = -g
+
+CPPFLAGS = 
+
+#CFLAGS = $(COPTFLAGS)
+CFLAGS = -Wall $(COPTFLAGS)
+
+LDFLAGS = -lm -lpthread
+
+PICFLAG = -fPIC
+
