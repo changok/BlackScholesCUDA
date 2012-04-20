@@ -19,8 +19,8 @@ include Makefile.include
 LDFLAGS += -Ldcmt0.4/lib -ldcmt
 CFLAGS += -DUSE_MERSENNE_TWISTER
 
-HW1_INCS = black_scholes.h gaussian.h parser.h random.h timer.h util.h
-HW1_C_SRCS = black_scholes.c gaussian.c main.c parser.c random.c timer.c util.c
+HW1_INCS = black_scholes.h gaussian.h mock_gaussian.h parser.h random.h timer.h util.h
+HW1_C_SRCS = black_scholes.c mock_gaussian.c gaussian.c main.c parser.c random.c timer.c util.c
 HW1_C_OBJS = $(HW1_C_SRCS:.c=.o)
 HW1_EXE = hw1.x
 
@@ -31,14 +31,16 @@ all: hw1.x
 	$(CC) -c $(CFLAGS) $(CPPFLAGS) $< -o $@
 
 hw1.x: $(HW1_C_OBJS) dcmt0.4/lib/libdcmt.$(DYLIB_SUFFIX)
-	$(LINKER) $(CFLAGS) $(LDFLAGS) $(HW1_C_OBJS) -o $@
+	$(LINKER) $(CFLAGS) $(HW1_C_OBJS) -o $@ $(LDFLAGS)
 
 dcmt0.4/lib/libdcmt.$(DYLIB_SUFFIX):
 	make -C dcmt0.4/lib
 
-black_scholes.o: black_scholes.c black_scholes.h gaussian.h random.h timer.h util.h
+black_scholes.o: black_scholes.c black_scholes.h gaussian.h mock_gaussian.h random.h timer.h util.h
 
 gaussian.o: gaussian.c gaussian.h util.h
+
+mock_gaussian.o : mock_gaussian.c mock_gaussian.h
 
 main.o: main.c black_scholes.h parser.h random.h timer.h
 

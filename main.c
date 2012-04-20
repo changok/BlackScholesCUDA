@@ -1,11 +1,13 @@
+#include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
+
 #include "black_scholes.h"
 #include "parser.h"
 #include "random.h"
 #include "timer.h"
 
-#include <errno.h>
-#include <stdio.h>
-#include <stdlib.h>
+extern rnd_mode = 0;
 
 /**
  * Usage: ./hw1.x <filename> <nthreads>
@@ -41,12 +43,16 @@ main (int argc, char* argv[])
   if (argc < 3)
     {
       fprintf (stderr, 
-	       "Usage: ./hw1.x <filename> <nthreads>\n\n");
+	       "Usage: ./hw1.x <filename> <nthreads> [rnd_mode]\n\n");
       exit (EXIT_FAILURE);
     }
   filename = argv[1];
   nthreads = to_int (argv[2]);
   parse_parameters (&S, &E, &r, &sigma, &T, &M, filename);
+
+  if(argc == 4) {
+      rnd_mode = to_int(argv[3]);
+  }
 
   /* 
    * Make sure init_timer() is only called by one thread,
@@ -66,7 +72,7 @@ main (int argc, char* argv[])
    * the max of all the prng_stream_spawn_times, or just take a representative
    * sample... 
    */
-  black_scholes (&interval, &prng_stream_spawn_time, S, E, r, sigma, T, M);
+  black_scholes (&interval, &prng_stream_spawn_time, S, E, r, sigma, T, M, nthreads);
   t2 = get_seconds ();
 
   /*

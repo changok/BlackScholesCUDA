@@ -6,8 +6,8 @@
 #####################################################################
 
 # Switch to "linux" if you are on Linux.  (You need the quotes.)
-#PLATFORM="linux"
-PLATFORM="mac"
+PLATFORM="linux"
+#PLATFORM="mac"
 
 ifeq ($(PLATFORM),"mac")
      CC = gcc
@@ -15,8 +15,8 @@ ifeq ($(PLATFORM),"mac")
      LD_SHARED_FLAG = -dynamiclib
      DYLIB_SUFFIX=dylib
 else
-     CC = icc
-     LINKER = icc
+     CC = gcc
+     LINKER = gcc
      # This flag tells the linker to make a shared library
      # instead of an executable.
      LD_SHARED_FLAG = -shared

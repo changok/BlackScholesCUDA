@@ -57,7 +57,21 @@ typedef struct __black_scholes_args_t {
    * [OUT] time (in seconds) that it takes to call spawn_prng_stream().
    */
   double prng_stream_spawn_time;
+
+  //int pid; // thread ID
+  int nthreads;  // number of threads
+  //int mod;
+  //double* thread_min;
 } black_scholes_args_t;
+
+// structure for GPU sequential version project
+typedef struct __wrapper_black_scholes_args_t {
+  black_scholes_args_t * black_sh;
+  int pid;
+  int nthreads;
+  int mod;
+  double* thread_means;
+} wrapper_black_scholes_args_t;
 
 /**
  * Frees any malloc'd objects in the args struct, without freeing the
@@ -95,7 +109,8 @@ black_scholes (confidence_interval_t* interval,
 	       const double r,
 	       const double sigma,
 	       const double T,
-	       const int M);
+	       const int M,
+               const int nthreads);
 
 
 #endif /* _black_scholes_h */

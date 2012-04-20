@@ -48,7 +48,14 @@ typedef double (*double_generator_no_input_t) ();
  */
 typedef double (*double_generator_one_input_t) (void*);
 
+#ifndef __gaussrand_state_t
+#define __gaussrand_state_t
+typedef struct __gaussrand_state_t {
+  double V1, V2, S;
+  int phase;
+} gaussrand_state_t;
+#endif
 
-
+typedef double (*double_generator_three_input_t) (const double_generator_one_input_t, void*, gaussrand_state_t*);
 
 #endif /* _util_h */

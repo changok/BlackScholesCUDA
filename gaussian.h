@@ -14,10 +14,13 @@
 /**
  * Current state of the Gaussian random number generator.
  */
+#ifndef __gaussrand_state_t
+#define __gaussrand_state_t
 typedef struct __gaussrand_state_t {
   double V1, V2, S;
   int phase;
 } gaussrand_state_t;
+#endif
 
 
 /**

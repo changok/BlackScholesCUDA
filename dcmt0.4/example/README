@@ -1,0 +1,4 @@
+mfh 08 Sep 2007:
+
+You need to add (the absolute path of) ../lib to the LD_LIBRARY_PATH
+environment variable in order to run the examples in this directory.
