@@ -9,7 +9,6 @@ using namespace std;
 
 const int TILE_WIDTH = 128;
 
-
 __device__ double black_scholes_value (const double S,
              const double E, const double r, const double sigma,
              const double T, const double random_number) {
@@ -25,21 +24,17 @@ __global__ void black_scholes_kernel(const double S, const double E,
     
     __shared__ double sum_of_trials[TILE_WIDTH];
     
-    unsigned int gId = blockIdx.x * threadIdx.x; 
+    unsigned int gId = (blockIdx.x * TILE_WIDTH) + threadIdx.x; 
     unsigned int tId = threadIdx.x;
 
-    /* Do the Black-Scholes iterations */
+    // Do the Black-Scholes iterations
     const double random_number = 1.0; 
-    cudaTrials[gId] = black_scholes_value (S, E, r, sigma, T, random_number);
+    double value = black_scholes_value (S, E, r, sigma, T, random_number);
+    cudaTrials[gId] = value;
     
-    // we need origianl trial values to calculate standard deviation
-    sum_of_trials[tId] = cudaTrials[gId];
+    // we need to keep origianl trial values for calculatng standard deviation
+    sum_of_trials[tId] = value;
 
-    /*
-     * We scale each term of the sum in order to avoid overflow. 
-     * This ensures that mean is never larger than the max
-     * element of trials[0 .. M-1].
-     */
     for(unsigned int stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
         __syncthreads();
         sum_of_trials[tId] += sum_of_trials[tId + stride];
@@ -54,15 +49,14 @@ __global__ void black_scholes_kernel(const double S, const double E,
 cit black_scholes(const double S, const double E, const double r,
                    const double sigma, const double T, const long M) {
     cit interval;
-    typedef unsigned long ul;
-    ul num_of_blocks = M/TILE_WIDTH;
+    int num_of_blocks = M/TILE_WIDTH;
     double* means = new double[num_of_blocks];
     double stddev = 0.0;
     double conf_width = 0.0;
 
     assert (M > 0);
     double* trials = new double[M]; //Array containing the results of each of the M trials.
-    ul size = M * sizeof(double);
+    long size = M * sizeof(double);
     assert (trials != NULL);
 
     double* blockMeans;
@@ -73,8 +67,8 @@ cit black_scholes(const double S, const double E, const double r,
 
     dim3 dimGrid(num_of_blocks);
     dim3 dimBlock(TILE_WIDTH);
-
-    black_scholes_kernel<<<dimGrid, dimBlock>>>(S, E, r, sigma, T, M, blockMeans, cudaTrials);
+  
+    black_scholes_kernel<<<num_of_blocks, dimBlock>>>(S, E, r, sigma, T, M, blockMeans, cudaTrials);
     
     cudaMemcpy(means, blockMeans, num_of_blocks * sizeof(double), cudaMemcpyDeviceToHost);
     cudaFree(blockMeans);
@@ -85,8 +79,6 @@ cit black_scholes(const double S, const double E, const double r,
     double mean = 0.0;
     // combine results from each threads
     for (long i = 0; i < num_of_blocks; i++) {
-        cout << trials[i] << endl;
-        cout << means[i] << endl;
         mean += means[i];
     }
     
