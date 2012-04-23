@@ -5,3 +5,4 @@ dcmt0.4/lib/libdcmt.*
 hw1.x
 *.o
 Debug
+bin
