@@ -37,7 +37,7 @@ int main(int argc, char* argv[]) {
     double t1, t2;
 //  double prng_stream_spawn_time;
 
-    if (argc < 3) {
+    if (argc < 2) {
         cerr << "Usage: ./blackScholes <filename> [Random Mode]" << endl << endl;
         exit(EXIT_FAILURE);
     }
