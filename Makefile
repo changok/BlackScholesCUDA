@@ -18,6 +18,4 @@ $(MAKE_BIN_DIR_TARGET) :
 	mkdir -p $(BIN_DIR)
 
 clean :
-	cd $(BIN_DIR); \
-	\rm -f *; \
-	cd ..
+	\rm -f $(BIN_DIR)/*
