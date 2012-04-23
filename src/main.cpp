@@ -4,7 +4,7 @@
 #include "common.h"
 #include "parser.h"
 #include "timer.h"
-#include "black_scholes.h"
+#include "black_scholes.cuh"
 
 using namespace std;
 

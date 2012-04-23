@@ -21,6 +21,7 @@ cit black_scholes(const double S, const double E, const double r,
                   const double sigma, const double T, const long M);
 
 void deinit_black_scholes_args (bca_t* args);
-static double black_scholes_stddev (const double mean, const long M, const double* trials);
+double black_scholes_stddev (const double mean, const long M, double* trials);
+//static double black_scholes_stddev (const double mean, const long M, const double* trials);
 
 #endif /* _black_scholes_h */
