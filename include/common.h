@@ -21,6 +21,6 @@ typedef struct __confidence_interval_t {
   double min, max;
 } confidence_interval_t;
 
-const typedef confidence_interval_t cit;
+typedef confidence_interval_t cit;
 
 #endif /* COMMON_H_ */

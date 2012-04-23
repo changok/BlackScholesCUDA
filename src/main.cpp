@@ -63,7 +63,7 @@ int main(int argc, char* argv[]) {
      * the max of all the prng_stream_spawn_times, or just take a representative
      * sample...
      */
-    cit* interval = black_scholes(S, E, r, sigma, T, M);
+    cit interval = black_scholes(S, E, r, sigma, T, M);
     t2 = get_seconds();
 
     /*
@@ -82,7 +82,7 @@ int main(int argc, char* argv[]) {
             << T << endl << "M        "
             << M << endl;
 
-    cout << "Confidence interval: " << interval->min << ", " << interval->max << endl;
+    cout << "Confidence interval: " << interval.min << ", " << interval.max << endl;
     cout << "Total simulation time: " << t2 - t1 << " seconds" << endl;
 //  cout << "PRNG stream spawn time: " << prng_stream_spawn_time << " seconds" << endl;
     return 0;
