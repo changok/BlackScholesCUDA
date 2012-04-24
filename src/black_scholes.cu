@@ -1,7 +1,10 @@
 #include <iostream>
+#include <limits>
 #include <cstddef>
 #include <cassert>
 #include <cmath>
+
+#include <stdio.h>
 
 #include <cuda.h>
 #include <curand_kernel.h>
@@ -30,7 +33,7 @@ __device__ double black_scholes_value (const double S,
 __global__ void black_scholes_kernel(const double S, const double E, 
             const double r, const double sigma, const double T,
             const long M, double* blockMeans, double* cudaTrials,
-            curandState* rnds) {
+            curandState* rnds, double* prns) {
     
     __shared__ double sum_of_trials[WINDOW_WIDTH];
     
@@ -41,6 +44,10 @@ __global__ void black_scholes_kernel(const double S, const double E,
     //const double random_number = 1.0; 
     curandState localState = rnds[gId];
     double RANDOM = curand_uniform( &localState );
+
+//test
+prns[gId] = RANDOM;
+
     rnds[gId] = localState;
 
     double value = black_scholes_value (S, E, r, sigma, T, RANDOM);
@@ -92,8 +99,8 @@ cit black_scholes(const double S, const double E, const double r,
 
     assert (M > 0);
     double* trials = new double[M]; //Array containing the results of each of the M trials.
-    long size = M * sizeof(double);
     assert (trials != NULL);
+    long size = M * sizeof(double);
 
     dim3 dimGrid(num_of_blocks);
     dim3 dimBlock(WINDOW_WIDTH);
@@ -108,10 +115,23 @@ cit black_scholes(const double S, const double E, const double r,
     double* cudaTrials;
     cudaMalloc((void**) &cudaTrials, size);
 
-    black_scholes_kernel<<<dimGrid, dimBlock>>>(S, E, r, sigma, T, M, blockMeans, cudaTrials, devStates);
+//test
+double* prns;
+cudaMalloc((void**) &prns, size);
+double* prns_table = new double[size];
+
+    black_scholes_kernel<<<dimGrid, dimBlock>>>(S, E, r, sigma, T, M, blockMeans, cudaTrials, devStates, prns);
     
     cudaMemcpy(means, blockMeans, num_of_blocks * sizeof(double), cudaMemcpyDeviceToHost);
     cudaFree(blockMeans);
+
+//test
+cudaMemcpy(prns_table, prns, size, cudaMemcpyDeviceToHost);
+for (long i = 0; i < M; i++) {
+	printf("%lf, ", prns_table[i]);
+	//cout << prns_table[i] << ", ";
+}
+cout << endl;
     
     double mean = 0.0;
     // combine results from each threads

@@ -20,6 +20,22 @@ to_double (const char* s)
   return val;  
 }
 
+long
+to_long (const char* s)
+{
+  long val;
+
+  errno = 0;
+  val = strtol (s, NULL, 10);
+  if (errno != 0)
+    {
+      fprintf (stderr, "*** Can\'t read string \'%s\' as a long; errno = %d ***\n", s, errno);
+      errno = 0;
+      exit (EXIT_FAILURE);
+    }
+  return val;  
+}
+
 int
 to_int (const char* s)
 {

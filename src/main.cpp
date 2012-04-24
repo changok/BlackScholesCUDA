@@ -1,4 +1,5 @@
 #include <iostream>
+#include <limits.h>
 #include <cstdlib>
 
 #include "common.h"
@@ -38,13 +39,19 @@ int main(int argc, char* argv[]) {
 //  double prng_stream_spawn_time;
 
     if (argc < 2) {
-        cerr << "Usage: ./blackScholes <filename> [Random Mode]" << endl << endl;
+        //cerr << "Usage: ./blackScholes <filename> [Random Mode]" << endl << endl;
+        cerr << "Usage: ./blackScholes <filename> [Number of Trials]" << endl << endl;
         exit(EXIT_FAILURE);
     }
     filename = argv[1];
     parse_parameters(&S, &E, &r, &sigma, &T, &M, filename);
 
-    if (argc == 3) {
+    if (argv[2] != NULL) {
+cout << "Number of Trials[M] : " << argv[2] << endl;
+      M = to_long(argv[2]);
+    }
+
+    if (argc == 4) {
         rnd_mode = to_int(argv[3]);
     }
 
