@@ -1,6 +1,7 @@
 #include <iostream>
 #include <limits.h>
 #include <cstdlib>
+#include <stdio.h>
 
 #include "common.h"
 #include "parser.h"
@@ -84,13 +85,21 @@ cout << "Number of Trials[M] : " << argv[2] << endl;
             << "S        " << S << endl
             << "E        " << E << endl
             << "r        " << r << endl
-            << "sigma    " << sigma
-            << endl << "T        "
-            << T << endl << "M        "
-            << M << endl;
+            << "sigma    " << sigma << endl 
+			<< "T        " << T << endl 
+			<< "M        " << M << endl;
 
     cout << "Confidence interval: " << interval.min << ", " << interval.max << endl;
     cout << "Total simulation time: " << t2 - t1 << " seconds" << endl;
+    cout << "part1 time: "; printf("%.20lf seconds\n", interval.t1);
+    cout << "part2 time: "; printf("%.20lf seconds\n", interval.t2);
+    cout << "part3 time: "; printf("%.20lf seconds\n", interval.t3);
+    cout << "part4 time: "; printf("%.20lf seconds\n", interval.t4);
+    cout << "part5 time: "; printf("%.20lf seconds\n", interval.t5);
+    //cout << "setup_rnd_kernel time: " << interval.t2 << " seconds" << endl;
+    //cout << "black_scholes_kernel time: " << interval.t2 << " seconds" << endl;
+    //cout << "black_scholes_kernel time: " << interval.t2 << " seconds" << endl;
+    //cout << "black_scholes_stddev time: " << interval.t3 << " seconds" << endl;
 //  cout << "PRNG stream spawn time: " << prng_stream_spawn_time << " seconds" << endl;
     return 0;
 }

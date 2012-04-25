@@ -19,6 +19,7 @@ static int rnd_mode = 0;
  */
 typedef struct __confidence_interval_t {
   double min, max;
+  double t1, t2, t3, t4, t5;
 } confidence_interval_t;
 
 typedef confidence_interval_t cit;
