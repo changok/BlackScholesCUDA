@@ -3,6 +3,10 @@
 
 #include "common.h"
 
+typedef struct __gaussrand_result_t {
+  double grand1, grand2;
+} gaussrand_result_t;
+
 typedef struct __black_scholes_args_t {
   double S, E, r, sigma, T; //[IN] Various parameters of the Black-Scholes MC method.
   long M; //[IN] Number of Black-Scholes MC iterations.

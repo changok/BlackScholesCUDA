@@ -3,6 +3,8 @@
 #include <cassert>
 #include <cmath>
 
+#include <stdio.h>
+
 #include <cuda.h>
 #include <curand_kernel.h>
 
@@ -12,7 +14,8 @@ using namespace std;
 
 const int WINDOW_WIDTH = 128;
 
-__global__ void setup_rnd_kernel ( curandState * state, unsigned long seed )
+//__global__ void setup_rnd_kernel ( curandState * state, unsigned long seed )
+__global__ void setup_rnd_kernel ( curandState * state, time_t seed )
 {
     long id = (blockIdx.x * WINDOW_WIDTH) + threadIdx.x;
     curand_init ( seed, id, 0, &state[id] );
@@ -27,10 +30,29 @@ __device__ double black_scholes_value (const double S,
       ((current_value - E < 0.0) ? 0.0 : current_value - E);
 }
 
+__device__ gaussrand_result_t gaussrand (const double u1, const double u2) {
+  gaussrand_result_t result;
+
+  //if (u1==u2) return -1.0;
+
+  double v1, v2, s;
+  do {
+    v1 = 2.0 * u1 - 1;
+    v2 = 2.0 * u2 - 1;
+    s = v1 * v1 + v2 * v2;
+  } while (s >= 1 || s== 0);
+
+  double w = sqrt ( (-2.0 * log (s)) / s);
+  result.grand1 = v1 * w;
+  result.grand2 = v2 * w;
+
+  return result;
+}
+
 __global__ void black_scholes_kernel(const double S, const double E, 
             const double r, const double sigma, const double T,
             const long M, double* blockMeans, double* cudaTrials,
-            curandState* rnds) {
+            curandState* randStates, double* debug) {
     
     __shared__ double sum_of_trials[WINDOW_WIDTH];
     
@@ -39,9 +61,16 @@ __global__ void black_scholes_kernel(const double S, const double E,
 
     // Do the Black-Scholes iterations
     //const double random_number = 1.0; 
-    curandState localState = rnds[gId];
+    curandState localState = randStates[gId];
     double RANDOM = curand_uniform( &localState );
-    rnds[gId] = localState;
+    //double unirand1 = curand_uniform( &localState );
+    //double unirand2 = curand_uniform( &localState );
+    //gaussrand_result_t gresult = guassrand (curand_uniform (&localState), curand_uniform (&localState));
+// prng test
+//debug[gId] = grand1;
+debug[gId] = RANDOM;
+// prng test end
+    randStates[gId] = localState;
 
     double value = black_scholes_value (S, E, r, sigma, T, RANDOM);
     cudaTrials[gId] = value;
@@ -49,6 +78,7 @@ __global__ void black_scholes_kernel(const double S, const double E,
     // we need to keep origianl trial values for calculatng standard deviation
     sum_of_trials[tId] = value;
 
+// shouldn't it be WINDOW_WIDTH instead of blockDim.x?
     for(unsigned int stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
         __syncthreads();
         sum_of_trials[tId] += sum_of_trials[tId + stride];
@@ -85,7 +115,7 @@ __global__ void black_scholes_variance_kernel(const double mean,
 cit black_scholes(const double S, const double E, const double r,
                    const double sigma, const double T, const long M) {
     cit interval;
-    int num_of_blocks = M/WINDOW_WIDTH;
+    int num_of_blocks = max((long)1,M/WINDOW_WIDTH);
     double* means = new double[num_of_blocks];
     double stddev = 0.0;
     double conf_width = 0.0;
@@ -98,9 +128,9 @@ cit black_scholes(const double S, const double E, const double r,
     dim3 dimGrid(num_of_blocks);
     dim3 dimBlock(WINDOW_WIDTH);
 
-    curandState* devStates;
-    cudaMalloc((void **) &devStates, M * sizeof(curandState));
-    setup_rnd_kernel<<<dimGrid, dimBlock>>>(devStates, time(NULL));
+    curandState* randStates;
+    cudaMalloc((void **) &randStates, M * sizeof(curandState));
+    setup_rnd_kernel<<<dimGrid, dimBlock>>>(randStates, time(NULL));
 
     double* blockMeans;
     cudaMalloc((void**) &blockMeans, num_of_blocks * sizeof(double));
@@ -108,10 +138,23 @@ cit black_scholes(const double S, const double E, const double r,
     double* cudaTrials;
     cudaMalloc((void**) &cudaTrials, size);
 
-    black_scholes_kernel<<<dimGrid, dimBlock>>>(S, E, r, sigma, T, M, blockMeans, cudaTrials, devStates);
+// prng test
+    double* hostRands = new double[M];
+    double* cudaRands;
+    cudaMalloc((void**) &cudaRands, size);
+    cudaMemset(cudaRands, 0, size);
+// prng test end
+
+    black_scholes_kernel<<<dimGrid, dimBlock>>>(S, E, r, sigma, T, M, blockMeans, cudaTrials, randStates, cudaRands);
     
     cudaMemcpy(means, blockMeans, num_of_blocks * sizeof(double), cudaMemcpyDeviceToHost);
-    cudaFree(blockMeans);
+
+// prng test
+    cudaMemcpy(hostRands, cudaRands, size, cudaMemcpyDeviceToHost);
+    for (int i = 0; i < M; i++) 
+      printf("%lf, ", hostRands[i]);
+    cout << endl;
+// prng test end
     
     double mean = 0.0;
     // combine results from each threads
@@ -122,12 +165,12 @@ cit black_scholes(const double S, const double E, const double r,
     stddev = black_scholes_stddev (mean, M, cudaTrials);
     cudaMemcpy(trials, cudaTrials, size, cudaMemcpyDeviceToHost);
     cudaFree(cudaTrials);
-
+    cudaFree(blockMeans);
     conf_width = 1.96 * stddev / sqrt ((double) M);
     interval.min = mean - conf_width;
     interval.max = mean + conf_width;
 
-    cudaFree(devStates);
+    cudaFree(randStates);
     delete [] trials;
     delete [] means;
     
