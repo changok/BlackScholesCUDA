@@ -15,7 +15,7 @@ using namespace std;
 
 const int WINDOW_WIDTH = 128;
 /**
- * Usage: ./blackScholes <filename> [Random Mode]
+ * Usage: ./blackScholes <filename> [Trials(M)] [Random Mode] [Debug Flag]
  *
  * <filename> (don't include the angle brackets) is the name of 
  * a data file in the current directory containing the parameters
@@ -35,14 +35,15 @@ const int WINDOW_WIDTH = 128;
  * 0, or nothing: return Gaussian Number (Standard Normal Distributed Random Number)
  * 1: Test purpose generator. Always returns 1
  * 2: Test purpose generator. It returns one element from pre-generated sequence
+ *
+ * [Debug Flag] print out with debug mode
  */
 int main(int argc, char* argv[]) {
     double S, E, r, sigma, T;
     long M = 0;
     char* filename = NULL;
     double t1, t2;
-	//debug_t debug;
-	int debug_mode = -1;
+	int debug_mode = 0;
 	int mode = 0;
 
     if (argc < 2) {
@@ -57,11 +58,6 @@ int main(int argc, char* argv[]) {
       M = to_long(argv[2]);
     }
 
-	//if (argv[3] != NULL) {
-	  //cout << "debug mode : " << argv[3] << endl;
-	  //debug_mode = to_int(argv[3]);
-	//}
-
     if (argv[3] != NULL) {
         mode = to_int(argv[3]);
 		if (mode > 2) {
@@ -69,6 +65,17 @@ int main(int argc, char* argv[]) {
 			exit(EXIT_FAILURE);
 		}
     }
+
+	if (argv[4] != NULL) {
+		debug_mode = to_int(argv[4]);
+		if (mode > 1) {
+			cout << "Only two debug mode are possible[0][1], So, automatically set as 1" << endl;
+			debug_mode = 1;
+		}
+		if (mode == 1) {
+			cout << "Debug mode ON, Generated Random Numbers[0~M] are below" << endl;
+		}
+	}
 
     /*
      * Make sure init_timer() is only called by one thread,
@@ -101,7 +108,7 @@ int main(int argc, char* argv[]) {
      * the max of all the prng_stream_spawn_times, or just take a representative
      * sample...
      */
-    cit interval = black_scholes(S, E, r, sigma, T, M, mode, cudafixedRands);
+    cit interval = black_scholes(S, E, r, sigma, T, M, mode, cudafixedRands, debug_mode);
 
     t2 = get_seconds();
 

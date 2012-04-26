@@ -53,7 +53,7 @@ __global__ void black_scholes_kernel(const double S, const double E,
             const double r, const double sigma, const double T,
             const long M, double* blockMeans, double* cudaTrials,
             curandState* randStates, const int mode, const double* fixedRands,
-			double* debug) {
+			double* debug, int debug_mode) {
     
     __shared__ double sum_of_trials[WINDOW_WIDTH];
    
@@ -84,8 +84,10 @@ __global__ void black_scholes_kernel(const double S, const double E,
     	gresult = gaussrand (&localState);
 	}
 
+if( debug_mode == 1) {
 debug[gId] = gresult.grand1;
 debug[gId+pad] = gresult.grand2;
+}
 
 	randStates[gId] = localState;
 
@@ -135,7 +137,7 @@ __global__ void black_scholes_variance_kernel(const double mean,
 
 cit black_scholes(const double S, const double E, const double r,
                    const double sigma, const double T, const long M,
-                   const int mode, double* cudafixedRands) {
+                   const int mode, double* cudafixedRands, int debug_mode) {
 
     cit interval;
     int num_of_blocks = M/WINDOW_WIDTH;
@@ -190,20 +192,23 @@ cit black_scholes(const double S, const double E, const double r,
     double* cudaTrials;
     cudaMalloc((void**) &cudaTrials, size);
 
-
 double* hostDebug = new double[M];
 double* cudaDebug;
+if (debug_mode == 1) {
 cudaMalloc((void**) &cudaDebug, size);
+}
 
-    black_scholes_kernel<<<dimGrid, dimBlock>>>(S, E, r, sigma, T, M, blockMeans, cudaTrials, randStates, mode, cudafixedRands, cudaDebug);
+    black_scholes_kernel<<<dimGrid, dimBlock>>>(S, E, r, sigma, T, M, blockMeans, cudaTrials, randStates, mode, cudafixedRands, cudaDebug, debug_mode);
 	
     cudaMemcpy(means, blockMeans, num_of_blocks * sizeof(double), cudaMemcpyDeviceToHost);
 
+if (debug_mode == 1) {
 cudaMemcpy(hostDebug, cudaDebug, size, cudaMemcpyDeviceToHost);
 for (int i = 0; i < M; i++) {
   printf("%lf, ", hostDebug[i]);
 }
 puts("");
+}
 
 	t2 =0; t2 = get_seconds();
 	interval.t3 = t2-t1;	// black_scholes_kernel time
