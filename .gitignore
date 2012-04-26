@@ -6,3 +6,4 @@ hw1.x
 *.o
 Debug
 bin
+.settings
