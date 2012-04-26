@@ -22,7 +22,7 @@ typedef black_scholes_args_t bca_t;
  *
  */
 cit black_scholes(const double S, const double E, const double r,
-                  const double sigma, const double T, const long M);
+                  const double sigma, const double T, const long M, int mode, double* cudafixedRands);
 
 void deinit_black_scholes_args (bca_t* args);
 double black_scholes_stddev (const double mean, const long M, double* trials);

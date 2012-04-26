@@ -10,6 +10,13 @@
 
 static int rnd_mode = 0;
 
+/* type for debug */
+typedef struct __debug_t {
+  int nthreads;
+  int nblocks;
+  double* rands;
+} debug_t;
+
 /**
  * Confidence interval [min,max].
  *

@@ -14,9 +14,7 @@
 using namespace std;
 
 const int WINDOW_WIDTH = 128;
-//const int WINDOW_WIDTH = 256;
 
-//__global__ void setup_rnd_kernel ( curandState * state, unsigned long seed )
 __global__ void setup_rnd_kernel ( curandState * state, time_t seed )
 {
     long id = (blockIdx.x * WINDOW_WIDTH) + threadIdx.x;
@@ -32,6 +30,7 @@ __device__ double black_scholes_value (const double S,
       ((current_value - E < 0.0) ? 0.0 : current_value - E);
 }
 
+// standard normal distributed random number [0~1]
 __device__ gaussrand_result_t gaussrand (curandState* localState) {
   gaussrand_result_t result;
 
@@ -43,8 +42,9 @@ __device__ gaussrand_result_t gaussrand (curandState* localState) {
   } while (s >= 1 || s== 0);
 
   double w = sqrt ( (-2.0 * log (s)) / s);
-  result.grand1 = v1 * w;
-  result.grand2 = v2 * w;
+
+  	result.grand1 = v1 * w;
+  	result.grand2 = v2 * w;
 
   return result;
 }
@@ -52,8 +52,8 @@ __device__ gaussrand_result_t gaussrand (curandState* localState) {
 __global__ void black_scholes_kernel(const double S, const double E, 
             const double r, const double sigma, const double T,
             const long M, double* blockMeans, double* cudaTrials,
-            curandState* randStates) { 
-//            double* debug) {
+            curandState* randStates, const int mode, const double* fixedRands,
+			double* debug) {
     
     __shared__ double sum_of_trials[WINDOW_WIDTH];
    
@@ -62,29 +62,40 @@ __global__ void black_scholes_kernel(const double S, const double E,
        by WINDOW_WIDTH/2 at each end of tId in a block */
     unsigned int gId = (blockIdx.x * WINDOW_WIDTH) + (threadIdx.x); 
     unsigned int tId = threadIdx.x;
+	
+	int pad = WINDOW_WIDTH/2;
 
     // Do the Black-Scholes iterations
     curandState localState = randStates[gId];
-    double RANDOM = curand_uniform( &localState );
-    gaussrand_result_t gresult = gaussrand (&localState);
+	gaussrand_result_t gresult;
 
-// prng debug_mode
-//debug[gId] = gresult.grand1;
-//debug[gId+(WINDOW_WIDTH/2)] = gresult.grand2;
-// prng debug_mode end
+	// use 1 as random number
+	if (mode == 1) {
+		gresult.grand1 = 1.0;
+		gresult.grand2 = 1.0;
+	}
+	// use pre-generated random number
+	else if (mode == 2) {
+	    gresult.grand1 = fixedRands[gId];
+		gresult.grand2 = fixedRands[gId+pad];
+	}
+	// use gaussian random number (standard normal distributed)
+	else {
+    	gresult = gaussrand (&localState);
+	}
 
-    randStates[gId] = localState;
+debug[gId] = gresult.grand1;
+debug[gId+pad] = gresult.grand2;
+
+	randStates[gId] = localState;
 
     gresult.grand1 = black_scholes_value (S, E, r, sigma, T, gresult.grand1);
     cudaTrials[gId] = gresult.grand1;
     gresult.grand2 = black_scholes_value (S, E, r, sigma, T, gresult.grand2);
-    cudaTrials[gId+(WINDOW_WIDTH/2)] = gresult.grand2;
-    
+    cudaTrials[gId+pad] = gresult.grand2;
     // we need to keep origianl trial values for calculatng standard deviation
     sum_of_trials[tId] = gresult.grand1;
-    sum_of_trials[tId+(WINDOW_WIDTH/2)] = gresult.grand2;
-
-// shouldn't it be WINDOW_WIDTH instead of blockDim.x?
+    sum_of_trials[tId+pad] = gresult.grand2;
 
     // don't have to do "blockDim.x >> 1" because of faked size of block
     for(unsigned int stride = blockDim.x; stride > 0; stride >>= 1) {
@@ -111,8 +122,7 @@ __global__ void black_scholes_variance_kernel(const double mean,
     variances[tId] = variances[tId] - mean;
     variances[tId] = (variances[tId] *  variances[tId] )/ (double)M;
 
-    //for(unsigned int stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
-    for(unsigned int stride = blockDim.x; stride > 0; stride >>= 1) {
+    for(unsigned int stride = blockDim.x>>1; stride > 0; stride >>= 1) {
         __syncthreads();
 		if (stride > tId)
         	variances[tId] += variances[tId + stride];
@@ -124,11 +134,11 @@ __global__ void black_scholes_variance_kernel(const double mean,
 }
 
 cit black_scholes(const double S, const double E, const double r,
-                   const double sigma, const double T, const long M) {
-                   //const debug) {
+                   const double sigma, const double T, const long M,
+                   const int mode, double* cudafixedRands) {
 
     cit interval;
-    int num_of_blocks = max((long)1,M/WINDOW_WIDTH);
+    int num_of_blocks = M/WINDOW_WIDTH;
     double* means = new double[num_of_blocks];
     double stddev = 0.0;
     double conf_width = 0.0;
@@ -142,9 +152,7 @@ cit black_scholes(const double S, const double E, const double r,
     long size = M * sizeof(double);
     assert (trials != NULL);
 
-
     dim3 dimGrid(num_of_blocks);
-    
     /* The number of threads in each block was supposed to be WINDOW_WIDTH(128). 
        However, the feature of gaussian randum number generator forced us to make 
        work per each thread to be twice of black scholes value operation instead of one. 
@@ -173,8 +181,6 @@ cit black_scholes(const double S, const double E, const double r,
 	interval.t5 = t2-t1;
 // part5_end
 
-
-
 // part3_begin
 	t1 = 0; t1 = get_seconds();
 
@@ -184,15 +190,25 @@ cit black_scholes(const double S, const double E, const double r,
     double* cudaTrials;
     cudaMalloc((void**) &cudaTrials, size);
 
-    black_scholes_kernel<<<dimGrid, dimBlock>>>(S, E, r, sigma, T, M, blockMeans, cudaTrials, randStates);
+
+double* hostDebug = new double[M];
+double* cudaDebug;
+cudaMalloc((void**) &cudaDebug, size);
+
+    black_scholes_kernel<<<dimGrid, dimBlock>>>(S, E, r, sigma, T, M, blockMeans, cudaTrials, randStates, mode, cudafixedRands, cudaDebug);
 	
     cudaMemcpy(means, blockMeans, num_of_blocks * sizeof(double), cudaMemcpyDeviceToHost);
+
+cudaMemcpy(hostDebug, cudaDebug, size, cudaMemcpyDeviceToHost);
+for (int i = 0; i < M; i++) {
+  printf("%lf, ", hostDebug[i]);
+}
+puts("");
 
 	t2 =0; t2 = get_seconds();
 	interval.t3 = t2-t1;	// black_scholes_kernel time
 // part3_end
 
-  
 // part4_begin
     t1 = 0;
 	t1 = get_seconds();
@@ -203,7 +219,7 @@ cit black_scholes(const double S, const double E, const double r,
         mean += means[i];
     }
    
-
+	printf("mean: %.20lf\n", mean);
 
     stddev = black_scholes_stddev (mean, M, cudaTrials);
 
@@ -220,7 +236,9 @@ cit black_scholes(const double S, const double E, const double r,
     interval.max = mean + conf_width;
 
     /* clean up */
-//    cudaFree(cudaDebug);
+	cudaFree(cudaDebug);
+	delete [] hostDebug;
+
     cudaFree(cudaTrials);
     cudaFree(blockMeans);
     cudaFree(randStates);
@@ -240,7 +258,6 @@ double black_scholes_stddev (const double mean, const long M, double* cudaTrials
     dim3 dimBlock(WINDOW_WIDTH);
     black_scholes_variance_kernel<<<dimGrid, dimBlock>>>(mean, M, cudaTrials, cudaVariances);
     cudaMemcpy(variances, cudaVariances, num_of_blocks * sizeof(double), cudaMemcpyDeviceToHost);
-    cudaFree(cudaVariances);
     
     double variance = 0.0;
     for(long idx=0; idx<num_of_blocks; idx++) {
@@ -252,49 +269,3 @@ double black_scholes_stddev (const double mean, const long M, double* cudaTrials
     
     return sqrt(variance);
 }
-
-/**
- * Compute the standard deviation of trials[0 .. M-1].
- */
-/*
-double black_scholes_stddev (const double mean, const long M, double* trials) {
-    double variance = 0.0;
-    long k;
-    
-    for (k = 0; k < M; k++) {
-        const double diff = trials[k] - mean;
-        
-        // Just like when computing the mean, we scale each term of this
-        // sum in order to avoid overflow.
-        //
-        variance += diff * diff / (double) M;
-    }
-    
-    return sqrt (variance);
-}
-*/
-
-// prng debug_mode
-/*
-    double* hostDebug = new double[M];
-    double* cudaDebug;
-    cudaMalloc((void**) &cudaDebug, size);
-    cudaMemset(cudaDebug, 0, size);
-*/
-// prng debug_mode end
-
-// prng debug_mode
-/*
-    cudaMemcpy(hostDebug, cudaDebug, size, cudaMemcpyDeviceToHost);
-    int m1 = M;
-    int term = 0;
-    while (m1 > 128) { m1 = m1 >> 1; term++;}
-    for (int i = 0; i < m1; i++) printf("%lf, ", hostDebug[i]);
-    printf("\n");
-    if (term) {
-        printf("upper range\n");
-        for (int i = M-1; i >= M-m1+1; i--) printf("%lf, ", hostDebug[i]);
-        printf("\n");
-    }
-*/
-// prng debug_mode end

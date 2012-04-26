@@ -3,6 +3,9 @@
 #include <cstdlib>
 #include <stdio.h>
 
+#include <cuda.h>
+#include <curand_kernel.h>
+
 #include "common.h"
 #include "parser.h"
 #include "timer.h"
@@ -10,6 +13,7 @@
 
 using namespace std;
 
+const int WINDOW_WIDTH = 128;
 /**
  * Usage: ./blackScholes <filename> [Random Mode]
  *
@@ -28,7 +32,7 @@ using namespace std;
  *
  * [Random Type] (don't include the brackets) is used for specify random
  * number generator type. It can be omitted.
- * 0: Normal Generator
+ * 0, or nothing: return Gaussian Number (Standard Normal Distributed Random Number)
  * 1: Test purpose generator. Always returns 1
  * 2: Test purpose generator. It returns one element from pre-generated sequence
  */
@@ -37,23 +41,33 @@ int main(int argc, char* argv[]) {
     long M = 0;
     char* filename = NULL;
     double t1, t2;
-//  double prng_stream_spawn_time;
+	//debug_t debug;
+	int debug_mode = -1;
+	int mode = 0;
 
     if (argc < 2) {
-        //cerr << "Usage: ./blackScholes <filename> [Random Mode]" << endl << endl;
-        cerr << "Usage: ./blackScholes <filename> [Number of Trials]" << endl << endl;
+        cerr << "Usage: ./blackScholes <filename> [M:Number of Trials] [Mode]" << endl << endl;
         exit(EXIT_FAILURE);
     }
     filename = argv[1];
     parse_parameters(&S, &E, &r, &sigma, &T, &M, filename);
 
     if (argv[2] != NULL) {
-cout << "Number of Trials[M] : " << argv[2] << endl;
+	  cout << "Number of Trials[M] : " << argv[2] << endl;
       M = to_long(argv[2]);
     }
 
-    if (argc == 4) {
-        rnd_mode = to_int(argv[3]);
+	//if (argv[3] != NULL) {
+	  //cout << "debug mode : " << argv[3] << endl;
+	  //debug_mode = to_int(argv[3]);
+	//}
+
+    if (argv[3] != NULL) {
+        mode = to_int(argv[3]);
+		if (mode > 2) {
+			cerr << "Available mode: [0], [1], [2]" << endl << endl;
+			exit(EXIT_FAILURE);
+		}
     }
 
     /*
@@ -65,13 +79,30 @@ cout << "Number of Trials[M] : " << argv[2] << endl;
     /*
      * Run the benchmark and time it.
      */
+
+	if (M < WINDOW_WIDTH) {
+		cout << "M(trials) is smaller than minimum requirement(128). So, automatically set as the minimum." << endl;
+		M = WINDOW_WIDTH;
+	}
+
+	// pre-generated fixed numbers as random for correctness test : mode[2]
+	double* fixedRands = new double[M];
+	for (int i = 0; i < M; i++) {
+	  fixedRands[i] = i/(double)M;
+	}
+	double* cudafixedRands;
+	cudaMalloc((void**) &cudafixedRands, M*sizeof(double));
+	cudaMemcpy(cudafixedRands, fixedRands, M*sizeof(double), cudaMemcpyHostToDevice);
+	
+
     t1 = get_seconds();
     /*
      * In the parallel case, you may want to set prng_stream_spawn_time to
      * the max of all the prng_stream_spawn_times, or just take a representative
      * sample...
      */
-    cit interval = black_scholes(S, E, r, sigma, T, M);
+    cit interval = black_scholes(S, E, r, sigma, T, M, mode, cudafixedRands);
+
     t2 = get_seconds();
 
     /*
@@ -96,11 +127,8 @@ cout << "Number of Trials[M] : " << argv[2] << endl;
     cout << "part3 time: "; printf("%.20lf seconds\n", interval.t3);
     cout << "part4 time: "; printf("%.20lf seconds\n", interval.t4);
     cout << "part5 time: "; printf("%.20lf seconds\n", interval.t5);
-    //cout << "setup_rnd_kernel time: " << interval.t2 << " seconds" << endl;
-    //cout << "black_scholes_kernel time: " << interval.t2 << " seconds" << endl;
-    //cout << "black_scholes_kernel time: " << interval.t2 << " seconds" << endl;
-    //cout << "black_scholes_stddev time: " << interval.t3 << " seconds" << endl;
-//  cout << "PRNG stream spawn time: " << prng_stream_spawn_time << " seconds" << endl;
+	cudaFree (cudafixedRands);
+	delete [] fixedRands;
     return 0;
 }
 
