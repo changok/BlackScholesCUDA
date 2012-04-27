@@ -58,7 +58,7 @@ __global__ void black_scholes_kernel(const double S, const double E,
    
     const long NUM_OF_TOT_THREAD = gridDim.x * blockDim.x;
     const long LOOP_SIZE = M / NUM_OF_TOT_THREAD;
-    const unsigned int GID = (blockIdx.x * blockDim.x) * LOOP_SIZE + threadIdx.x;
+    const unsigned int GID = (blockIdx.x * blockDim.x) * LOOP_SIZE + threadIdx.x * LOOP_SIZE;
     const unsigned int TID = threadIdx.x;
 
 	
@@ -77,8 +77,8 @@ __global__ void black_scholes_kernel(const double S, const double E,
             }
             // use pre-generated random number
             else if (mode == 2) {
-//                gresult.grand1 = fixedRands[gId + trial * (gridDim.x * blockDim.x)];
-//                gresult.grand2 = fixedRands[gId+pad];
+                gresult.grand1 = fixedRands[GID + trial];
+                gresult.grand2 = fixedRands[GID + trial+1];
             }
             // use gaussian random number (standard normal distributed)
             else {
@@ -99,7 +99,6 @@ __global__ void black_scholes_kernel(const double S, const double E,
         // we need to keep origianl trial values for calculatng standard deviation
         // for current calculation, we use trials
         // Also, to prevent overflow caused by adding, divide the value by M in advance
-        //means[tId] += value/(double)M;
         means[TID] += value/M;
         cudaTrials[GID + trial] = value;
     }
@@ -134,11 +133,9 @@ __global__ void black_scholes_variance_kernel(const double mean,
     
     variances[tId] = cudaTrials[gId];
     variances[tId] = variances[tId] - mean;
+    trunc(&variances[tId]);
     variances[tId] = (variances[tId] *  variances[tId])/ (double)(M-1);
 
-    cudaVariances[gId] = variances[tId];
-
-    /*
     for(unsigned int stride = blockDim.x>>1; stride > 0; stride >>= 1) {
         __syncthreads();
 		if (stride > tId)
@@ -148,7 +145,6 @@ __global__ void black_scholes_variance_kernel(const double mean,
     if(tId == 0) {
         cudaVariances[blockIdx.x] = variances[0];
     }
-    */
 }
 
 cit black_scholes(const double S, const double E, const double r,
@@ -229,6 +225,8 @@ cit black_scholes(const double S, const double E, const double r,
             printf("t%d: %lf, ", i, t[i]);
         }
         puts("");
+
+        delete [] t;
     }
 
 	t2 =0; t2 = get_seconds();
@@ -274,23 +272,19 @@ cit black_scholes(const double S, const double E, const double r,
 }
 
 double black_scholes_stddev (const double mean, const long M, double* cudaTrials) {
-//    double* variances = new double[M/WINDOW_WIDTH];
-    double* variances = new double[M];
+    double* variances = new double[M/WINDOW_WIDTH];
     double* cudaVariances;
-    //cudaMalloc((void**) &cudaVariances, M/WINDOW_WIDTH * sizeof(double));
-    cudaMalloc((void**) &cudaVariances, M * sizeof(double));
+    cudaMalloc((void**) &cudaVariances, M/WINDOW_WIDTH * sizeof(double));
     
 //    dim3 dimGrid(M/WINDOW_WIDTH);
     dim3 dimGrid(M/WINDOW_WIDTH);
     dim3 dimBlock(WINDOW_WIDTH);
     black_scholes_variance_kernel<<<dimGrid, dimBlock>>>(mean, M, cudaTrials, cudaVariances);
 
-//    cudaMemcpy(variances, cudaVariances, M/WINDOW_WIDTH * sizeof(double), cudaMemcpyDeviceToHost);
-    cudaMemcpy(variances, cudaVariances, M * sizeof(double), cudaMemcpyDeviceToHost);
+    cudaMemcpy(variances, cudaVariances, M/WINDOW_WIDTH * sizeof(double), cudaMemcpyDeviceToHost);
     
     double variance = 0.0;
-//    for(long idx=0; idx<M/WINDOW_WIDTH; idx++) {
-    for(long idx=0; idx<M; idx++) {
+    for(long idx=0; idx<M/WINDOW_WIDTH; idx++) {
         cout << "std: " << variances[idx] << ", ";
         variance += variances[idx];
     }
