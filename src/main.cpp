@@ -13,7 +13,6 @@
 
 using namespace std;
 
-const int WINDOW_WIDTH = 128;
 /**
  * Usage: ./blackScholes <filename> [Trials(M)] [Random Mode] [Debug Flag]
  *
@@ -88,7 +87,7 @@ int main(int argc, char* argv[]) {
      */
 
 	if (M < WINDOW_WIDTH) {
-		cout << "M(trials) is smaller than minimum requirement(128). So, automatically set as the minimum." << endl;
+		cout << "M(trials) is smaller than minimum requirement(" << WINDOW_WIDTH << "). So, automatically set as the minimum." << endl;
 		M = WINDOW_WIDTH;
 	}
 

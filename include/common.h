@@ -31,4 +31,7 @@ typedef struct __confidence_interval_t {
 
 typedef confidence_interval_t cit;
 
+const long BLOCK_SIZE = 128;
+const int WINDOW_WIDTH = 256;
+
 #endif /* COMMON_H_ */
