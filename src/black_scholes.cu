@@ -23,13 +23,11 @@ __global__ void setup_rnd_kernel ( curandState * state, time_t seed )
     curand_init ( seed, id, 0, &state[id] );
 } 
 
-__device__ double black_scholes_value (const double S,
-             const double E, const double r, const double sigma,
-             const double T, const double random_number) {
-    const double current_value = S * exp ( (r - (sigma*sigma) / 2.0) * T +
-                       sigma * sqrt (T) * random_number );
-    return exp (-r * T) *
-      ((current_value - E < 0.0) ? 0.0 : current_value - E);
+__device__ double black_scholes_value (BSConfig cf, const double random_number) {
+    const double current_value = cf.S * exp ( (cf.r - (cf.sigma*cf.sigma) / 2.0) * cf.T +
+                                 cf.sigma * sqrt (cf.T) * random_number );
+    return exp (-cf.r * cf.T) *
+      ((current_value - cf.E < 0.0) ? 0.0 : current_value - cf.E);
 }
 
 // standard normal distributed random number [0~1]
@@ -56,8 +54,7 @@ __global__ void black_scholes_kernel(double* blockMeans, double* cudaTrials,
     
     __shared__ double means[WINDOW_WIDTH];
    
-    const long NUM_OF_TOT_THREAD = gridDim.x * blockDim.x;
-    const long LOOP_SIZE = config.M / NUM_OF_TOT_THREAD;
+    const long LOOP_SIZE = config.M / (BLOCK_SIZE * WINDOW_WIDTH);
     const unsigned int GID = (blockIdx.x * blockDim.x) * LOOP_SIZE + threadIdx.x * LOOP_SIZE;
     const unsigned int TID = threadIdx.x;
 
@@ -79,21 +76,20 @@ __global__ void black_scholes_kernel(double* blockMeans, double* cudaTrials,
             else if (config.RND_MODE == 2) {
                 gresult.grand1 = fixedRands[GID + trial];
                 gresult.grand2 = fixedRands[GID + trial+1];
+
+                if(config.DEBUG_LEVEL == 2) {
+                    debug[GID + trial] = gresult.grand1;
+                    debug[GID + trial + 1] = gresult.grand2;
+                }
             }
             // use gaussian random number (standard normal distributed)
             else {
                 gresult = gaussrand (&localState);
             }
 
-            if(config.DEBUG_LEVEL == 1) {
-                debug[GID + trial] = gresult.grand1;
-            }
-            value = black_scholes_value (config.S, config.E, config.r, config.sigma, config.T, gresult.grand1);
+            value = black_scholes_value (config, gresult.grand1);
         } else {
-            if(config.DEBUG_LEVEL == 1) {
-                debug[GID + trial] = gresult.grand2;
-            }
-            value = black_scholes_value (config.S, config.E, config.r, config.sigma, config.T, gresult.grand2);
+            value = black_scholes_value (config, gresult.grand2);
         }
 
         // we need to keep origianl trial values for calculatng standard deviation
@@ -117,16 +113,16 @@ __global__ void black_scholes_kernel(double* blockMeans, double* cudaTrials,
 __device__ void trunc(double* target) {
     if (*target < 0.0000000005 && *target > 0)
         *target = 0.0;
-    if (*target > -0.0000000005 && *target < 0)
+    else if (*target > -0.0000000005 && *target < 0)
         *target = 0.0;
 }
 
-__global__ void black_scholes_variance_kernel(const double mean,
-            const long M, double* cudaTrials, double* cudaVariances) {
+__global__ void black_scholes_variance_kernel(const long M, const double mean,
+            double* cudaTrials, double* cudaVariances, double* debug) {
     
     __shared__ double variances[WINDOW_WIDTH];
     
-    unsigned int gId = (blockIdx.x * WINDOW_WIDTH) + threadIdx.x; 
+    long gId = (blockIdx.x * WINDOW_WIDTH) + threadIdx.x;
     unsigned int tId = threadIdx.x;
     
     variances[tId] = cudaTrials[gId];
@@ -138,12 +134,13 @@ __global__ void black_scholes_variance_kernel(const double mean,
     // acceptable valid range
     trunc(&variances[tId]);
 
-    variances[tId] = (variances[tId] *  variances[tId])/ (double)(M-1);
+    variances[tId] = (variances[tId] *  variances[tId]) / (double)(M-1);
+    debug[gId] = cudaTrials[gId];
 
-    for(unsigned int stride = blockDim.x>>1; stride > 0; stride >>= 1) {
+    for(unsigned int stride = WINDOW_WIDTH>>1; stride > 0; stride >>= 1) {
         __syncthreads();
-		if (stride > tId)
-        	variances[tId] += variances[tId + stride];
+        if (stride > tId)
+            variances[tId] += variances[tId + stride];
     }
 
     if(tId == 0) {
@@ -165,17 +162,17 @@ Result black_scholes(double* cudafixedRands, BSConfig config) {
     dim3 dimBlock(WINDOW_WIDTH);
 
     // part5_start
-	t1 = 0; t1 = get_seconds();
+	t1 = get_seconds();
     curandState* randStates;
     cutilSafeCall(cudaMalloc((void **) &randStates, config.totalNumOfThread() * sizeof(curandState)));
 
     setup_rnd_kernel<<<dimGrid, dimBlock>>>(randStates, time(NULL));
-	t2 = 0; t2 = get_seconds();
+	t2 = get_seconds();
 	result.init_seeds_setup_time = t2 - t1;
 	// part5_end
 
 	// part3_begin
-	t1 = 0; t1 = get_seconds();
+	t1 = get_seconds();
 
     double* blockMeans;
     cutilSafeCall(cudaMalloc((void**) &blockMeans, config.totalNumOfBlocks() * sizeof(double)));
@@ -183,12 +180,9 @@ Result black_scholes(double* cudafixedRands, BSConfig config) {
     double* cudaTrials;
     cutilSafeCall(cudaMalloc((void**) &cudaTrials, size));
 
-    double* hostDebug = NULL;
+    double* hostDebug = new double[config.M];
     double* cudaDebug;
-//    if (config.DEBUG_LEVEL == 1) {
-        hostDebug = new double[config.M];
-        cutilSafeCall(cudaMalloc((void**) &cudaDebug, size));
-//    }
+    cutilSafeCall(cudaMalloc((void**) &cudaDebug, size));
 
     black_scholes_kernel<<<dimGrid, dimBlock>>>(blockMeans, cudaTrials, randStates, cudafixedRands, cudaDebug, config);
 
@@ -197,31 +191,33 @@ Result black_scholes(double* cudafixedRands, BSConfig config) {
     if (config.DEBUG_LEVEL == 2) {
         cudaMemcpy(hostDebug, cudaDebug, size, cudaMemcpyDeviceToHost);
         for (int i = 0; i < config.M; i++) {
-            printf("r%d: %lf, ", i, hostDebug[i]);
+            if(i < 10 || i > (config.M - 10))
+                printf("RND[%d]: %lf\n", i, hostDebug[i]);
         }
         puts("\n");
 
         for (int i = 0; i < config.totalNumOfBlocks(); i++) {
-            printf("m%d: %lf, ", i, means[i]);
+            if(i < 10 || i > (config.M - 10))
+                printf("MEAN[%d]: %lf\n", i, means[i]);
         }
         puts("");
 
         double* t = new double[config.M];
         cutilSafeCall(cudaMemcpy(t, cudaTrials, size, cudaMemcpyDeviceToHost));
         for (int i = 0; i < config.M; i++) {
-            printf("t%d: %lf, ", i, t[i]);
+            if(i < 10 || i > (config.M - 10))
+                printf("TRIAL[%d]: %lf\n", i, t[i]);
         }
         puts("");
 
         delete [] t;
     }
 
-	t2 =0; t2 = get_seconds();
+	t2 = get_seconds();
 	result.black_sholes_kernel_time = t2 - t1;
 	// part3_end
 
 	// part4_begin
-    t1 = 0;
 	t1 = get_seconds();
     result.mean = 0.0;
 
@@ -230,9 +226,8 @@ Result black_scholes(double* cudafixedRands, BSConfig config) {
         result.mean += means[i];
     }
 
-	result.stddev = black_scholes_stddev (result.mean, config.M, cudaTrials);
+	result.stddev = black_scholes_stddev(result.mean, config, cudaTrials);
 
-	t2 = 0;
 	t2 = get_seconds();
 	result.calc_stddev_time = t2 - t1;
 	// part4_end
@@ -254,24 +249,43 @@ Result black_scholes(double* cudafixedRands, BSConfig config) {
     return result;
 }
 
-double black_scholes_stddev (const double mean, const long M, double* cudaTrials) {
-    double* variances = new double[M/WINDOW_WIDTH];
+double black_scholes_stddev (const double mean, BSConfig config, double* cudaTrials) {
+    double* variances = new double[config.M/WINDOW_WIDTH];
     double* cudaVariances;
-    cutilSafeCall(cudaMalloc((void**) &cudaVariances, M/WINDOW_WIDTH * sizeof(double)));
+    cutilSafeCall(cudaMalloc((void**) &cudaVariances, (config.M/WINDOW_WIDTH) * sizeof(double)));
 
-    dim3 dimGrid(M/WINDOW_WIDTH);
+    dim3 dimGrid(config.M/WINDOW_WIDTH);
     dim3 dimBlock(WINDOW_WIDTH);
-    black_scholes_variance_kernel<<<dimGrid, dimBlock>>>(mean, M, cudaTrials, cudaVariances);
 
-    cutilSafeCall(cudaMemcpy(variances, cudaVariances, M/WINDOW_WIDTH * sizeof(double), cudaMemcpyDeviceToHost));
+    double* debug = new double[config.M];
+
+    double* cudaDebug;
+    cutilSafeCall(cudaMalloc((void**) &cudaDebug, config.M * sizeof(double)));
+    black_scholes_variance_kernel<<<dimGrid, dimBlock>>>(config.M, mean, cudaTrials, cudaVariances, cudaDebug);
+
+    cutilSafeCall(cudaMemcpy(variances, cudaVariances, (config.M/WINDOW_WIDTH) * sizeof(double), cudaMemcpyDeviceToHost));
+    cutilSafeCall(cudaMemcpy(debug, cudaDebug, config.M * sizeof(double), cudaMemcpyDeviceToHost));
+
     double variance = 0.0;
-    for(long idx=0; idx<M/WINDOW_WIDTH; idx++) {
+    for(long idx=0; idx<config.M/WINDOW_WIDTH; idx++) {
+        if(config.DEBUG_LEVEL == 2)
+            cout << "VARI[" << idx << "]: " << variances[idx] << endl;
         variance += variances[idx];
     }
     cout << endl;
 
+    for(long idx=0; idx<config.M; idx++) {
+        if(config.DEBUG_LEVEL == 2) {
+            if(idx < 10 || idx > (config.M - 10))
+                cout << "TRI[" << idx << "]: " << debug[idx] << endl;
+        }
+    }
+
+    cudaFree(cudaDebug);
     cudaFree(cudaVariances);
+
     delete [] variances;
+    delete [] debug;
     
     return sqrt(variance);
 }

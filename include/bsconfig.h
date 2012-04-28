@@ -23,5 +23,4 @@ public:
     BSConfig();
 };
 
-
 #endif /* BSCONFIG_H_ */
