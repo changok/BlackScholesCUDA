@@ -113,3 +113,50 @@ parse_parameters (double* S,
     }
   *M = to_double (line);
 }
+
+void parse_parameters (BSConfig* config, const char* filename) {
+  char line[400];
+  FILE* stream = NULL;
+
+  stream = fopen (filename, "r");
+  if (stream == NULL)
+    {
+      fprintf (stderr, "*** Failed to open parameters file \'%s\' ***\n", filename);
+      exit (EXIT_FAILURE);
+    }
+
+  if (NULL == fgets (line, 400, stream))
+    {
+      fprintf (stderr, "*** Failed to read parameter S from parameters file \'%s\' ***\n", filename);
+      exit (EXIT_FAILURE);
+    }
+  config->S = to_double (line);
+
+  if (NULL == fgets (line, 400, stream))
+    {
+      fprintf (stderr, "*** Failed to read parameter E from parameters file \'%s\' ***\n", filename);
+      exit (EXIT_FAILURE);
+    }
+  config->E = to_double (line);
+
+  if (NULL == fgets (line, 400, stream))
+    {
+      fprintf (stderr, "*** Failed to read parameter r from parameters file \'%s\' ***\n", filename);
+      exit (EXIT_FAILURE);
+    }
+  config->r = to_double (line);
+
+  if (NULL == fgets (line, 400, stream))
+    {
+      fprintf (stderr, "*** Failed to read parameter sigma from parameters file \'%s\' ***\n", filename);
+      exit (EXIT_FAILURE);
+    }
+  config->sigma = to_double (line);
+
+  if (NULL == fgets (line, 400, stream))
+    {
+      fprintf (stderr, "*** Failed to read parameter T from parameters file \'%s\' ***\n", filename);
+      exit (EXIT_FAILURE);
+    }
+  config->T = to_double (line);
+}

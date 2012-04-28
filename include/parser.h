@@ -1,6 +1,8 @@
 #ifndef _parser_h
 #define _parser_h
 
+#include "bsconfig.h"
+
 double 
 to_double (const char* s);
 
@@ -18,5 +20,7 @@ parse_parameters (double* S,
 		  double* T, 
 		  long* M,
 		  const char* filename);
+
+void parse_parameters (BSConfig* config, const char* filename);
 
 #endif /* _parser_h */

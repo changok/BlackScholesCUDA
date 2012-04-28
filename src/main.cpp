@@ -5,11 +5,14 @@
 
 #include <cuda.h>
 #include <curand_kernel.h>
+#include "cutil.h"
+#include "cutil_inline_runtime.h"
 
 #include "common.h"
 #include "parser.h"
 #include "timer.h"
 #include "black_scholes.cuh"
+#include "bsconfig.h"
 
 using namespace std;
 
@@ -27,7 +30,6 @@ using namespace std;
  * r
  * sigma
  * T
- * M
  *
  * [Random Type] (don't include the brackets) is used for specify random
  * number generator type. It can be omitted.
@@ -38,41 +40,39 @@ using namespace std;
  * [Debug Flag] print out with debug mode
  */
 int main(int argc, char* argv[]) {
-    double S, E, r, sigma, T;
-    long M = 0;
+    BSConfig config;
     char* filename = NULL;
     double t1, t2;
-	int debug_mode = 0;
-	int mode = 0;
 
     if (argc < 2) {
         cerr << "Usage: ./blackScholes <filename> [M:Number of Trials] [Mode]" << endl << endl;
         exit(EXIT_FAILURE);
     }
     filename = argv[1];
-    parse_parameters(&S, &E, &r, &sigma, &T, &M, filename);
+    parse_parameters(&config, filename);
 
     if (argv[2] != NULL) {
 	  cout << "Number of Trials[M] : " << argv[2] << endl;
-      M = to_long(argv[2]);
+	  config.M = to_long(argv[2]);
     }
 
     if (argv[3] != NULL) {
-        mode = to_int(argv[3]);
-		if (mode > 2) {
+        config.RND_MODE = to_int(argv[3]);
+		if (config.RND_MODE > 2) {
 			cerr << "Available mode: [0], [1], [2]" << endl << endl;
 			exit(EXIT_FAILURE);
 		}
     }
 
 	if (argv[4] != NULL) {
-		debug_mode = to_int(argv[4]);
-		if (mode > 1) {
-			cout << "Only two debug mode are possible[0][1], So, automatically set as 1" << endl;
-			debug_mode = 1;
-		}
-		if (mode == 1) {
-			cout << "Debug mode ON, Generated Random Numbers[0~M] are below" << endl;
+		config.DEBUG_LEVEL = to_int(argv[4]);
+		if (config.DEBUG_LEVEL > 2) {
+			cout << "Only three debug mode are possible[0][1][2], So, automatically set as 0" << endl;
+			config.DEBUG_LEVEL = 0;
+		} else if (config.DEBUG_LEVEL == 1) {
+			cout << "Debug mode 1 ON" << endl;
+		} else if (config.DEBUG_LEVEL == 2){
+		    cout << "Debug mode 2 ON, Generated Random Numbers[0~M] are below" << endl;
 		}
 	}
 
@@ -86,20 +86,20 @@ int main(int argc, char* argv[]) {
      * Run the benchmark and time it.
      */
 
-	if (M < WINDOW_WIDTH) {
+	if (config.M < WINDOW_WIDTH) {
 		cout << "M(trials) is smaller than minimum requirement(" << WINDOW_WIDTH << "). So, automatically set as the minimum." << endl;
-		M = WINDOW_WIDTH;
+		config.M = WINDOW_WIDTH;
 	}
 
 	// pre-generated fixed numbers as random for correctness test : mode[2]
-	double* fixedRands = new double[M];
-	for (int i = 0; i < M; i++) {
-	  fixedRands[i] = i/(double)M;
-	}
+	double* fixedRands = new double[config.M];
 	double* cudafixedRands;
-	cudaMalloc((void**) &cudafixedRands, M*sizeof(double));
-	cudaMemcpy(cudafixedRands, fixedRands, M*sizeof(double), cudaMemcpyHostToDevice);
-	
+    for (int i = 0; i < config.M; i++) {
+      fixedRands[i] = i/(double)config.M;
+    }
+
+    cutilSafeCall(cudaMalloc((void**) &cudafixedRands, config.M*sizeof(double)));
+    cutilSafeCall(cudaMemcpy(cudafixedRands, fixedRands, config.M*sizeof(double), cudaMemcpyHostToDevice));
 
     t1 = get_seconds();
     /*
@@ -107,7 +107,8 @@ int main(int argc, char* argv[]) {
      * the max of all the prng_stream_spawn_times, or just take a representative
      * sample...
      */
-    cit interval = black_scholes(S, E, r, sigma, T, M, mode, cudafixedRands, debug_mode);
+    Result result = black_scholes(cudafixedRands, config);
+    //Result result = black_scholes(S, E, r, sigma, T, M, mode, cudafixedRands, debug_mode, config);
 
     t2 = get_seconds();
 
@@ -119,22 +120,30 @@ int main(int argc, char* argv[]) {
 
     cout << "Black-Scholes in GPU benchmark :" << endl
             << "------------------------" << endl
-            << "S        " << S << endl
-            << "E        " << E << endl
-            << "r        " << r << endl
-            << "sigma    " << sigma << endl 
-			<< "T        " << T << endl 
-			<< "M        " << M << endl;
+            << "S        " << config.S << endl
+            << "E        " << config.E << endl
+            << "r        " << config.r << endl
+            << "sigma    " << config.sigma << endl
+			<< "T        " << config.T << endl
+			<< "M        " << config.M << endl;
 
-    cout << "Confidence interval: " << interval.min << ", " << interval.max << endl;
-    cout << "Total simulation time: " << t2 - t1 << " seconds" << endl;
-    cout << "part1 time: "; printf("%.20lf seconds\n", interval.t1);
-    cout << "part2 time: "; printf("%.20lf seconds\n", interval.t2);
-    cout << "part3 time: "; printf("%.20lf seconds\n", interval.t3);
-    cout << "part4 time: "; printf("%.20lf seconds\n", interval.t4);
-    cout << "part5 time: "; printf("%.20lf seconds\n", interval.t5);
+    cout.precision(7);
+    cout << endl;
+    cout << "Mean: " << result.mean << endl;
+    cout << "Standard Deviation: " << result.stddev << endl;
+    cout << "Confidence interval: [" << result.min << ", " << result.max << "]" << endl;
+
+    cout.precision(10);
+    cout << "Overall Simulation Time     : " << t2 - t1 << " seconds" << endl;
+
+    if(config.DEBUG_LEVEL == 1) {
+        cout << "Random streams Initializing : " << result.init_seeds_setup_time << " seconds" << endl;
+        cout << "Black Scholes Kernel        : " << result.black_sholes_kernel_time << " seconds" << endl;
+        cout << "Standard Deviation Kernel   : " << result.calc_stddev_time << " seconds" << endl;
+    }
+
 	cudaFree (cudafixedRands);
-	delete [] fixedRands;
+	if(fixedRands != NULL) delete [] fixedRands;
     return 0;
 }
 
