@@ -142,6 +142,11 @@ __global__ void black_scholes_variance_kernel(const long M, const double mean,
     for(long trial = 0; trial < LOOP_SIZE; trial++) {
         double v = cudaTrials[GID + trial];
         v = v - mean;
+
+        // Meaningless value such as 1.1E-15 could lead invalid result
+        // when number of trial is so high. Thus, truncate all after the 10th
+        // decimal place. Even though we truncate them, the result still in
+        // acceptable valid range
         trunc(&v);
 
         variances[TID] += (v *  v) / (double)(M-1);
