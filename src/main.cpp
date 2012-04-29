@@ -85,16 +85,23 @@ int main(int argc, char* argv[]) {
 
 	if (argv[4] != NULL) {
 		config.DEBUG_LEVEL = to_int(argv[4]);
-		if (config.DEBUG_LEVEL > 2) {
-			cout << "Only two debug mode are possible[0][1], default is 0. Thus set as 0" << endl;
-			config.DEBUG_LEVEL = 0;
-		} else if (config.DEBUG_LEVEL == 1) {
 #ifdef __GOGO_DEBUG__
+		if (config.DEBUG_LEVEL > 2) {
+			cout << "Only three debug mode are possible[0][1][2], default is 0. Thus set as 0" << endl;
+			config.DEBUG_LEVEL = 0;
+		} else if (config.DEBUG_LEVEL == 2) {
 			cout << "Verbose Debug Mode ON" << endl;
-#else
+		} else if (config.DEBUG_LEVEL == 1) {
 			cout << "Debug Mode ON" << endl;
-#endif
 		}
+#else
+		if (config.DEBUG_LEVEL > 1) {
+            cout << "Only two debug mode are possible[0][1], default is 0. Thus set as 0" << endl;
+            config.DEBUG_LEVEL = 0;
+		} else if (config.DEBUG_LEVEL == 1) {
+            cout << "Debug Mode ON" << endl;
+        }
+#endif
 	}
 
     /*
