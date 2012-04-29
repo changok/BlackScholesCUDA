@@ -49,15 +49,19 @@ __device__ gaussrand_result_t gaussrand (curandState* localState) {
   return result;
 }
 
+#ifdef __GOGO_DEBUG__
 __global__ void black_scholes_kernel(double* blockMeans, double* cudaTrials,
             curandState* randStates, const double* fixedRands, double* debug, BSConfig config) {
+#else
+    __global__ void black_scholes_kernel(double* blockMeans, double* cudaTrials,
+                curandState* randStates, BSConfig config) {
+#endif
     
     __shared__ double means[WINDOW_WIDTH];
    
-    const long LOOP_SIZE = config.M / (BLOCK_SIZE * WINDOW_WIDTH);
+    const long LOOP_SIZE = (long)1 < (config.M / (BLOCK_SIZE * WINDOW_WIDTH)) ? config.M / (BLOCK_SIZE * WINDOW_WIDTH) : 1;
     const unsigned int GID = (blockIdx.x * blockDim.x) * LOOP_SIZE + threadIdx.x * LOOP_SIZE;
     const unsigned int TID = threadIdx.x;
-
 	
     curandState localState = randStates[(blockIdx.x * blockDim.x) + threadIdx.x];
     gaussrand_result_t gresult;
@@ -72,6 +76,7 @@ __global__ void black_scholes_kernel(double* blockMeans, double* cudaTrials,
                 gresult.grand1 = 1.0;
                 gresult.grand2 = 1.0;
             }
+#ifdef __GOGO_DEBUG__
             // use pre-generated random number
             else if (config.RND_MODE == 2) {
                 gresult.grand1 = fixedRands[GID + trial];
@@ -82,6 +87,7 @@ __global__ void black_scholes_kernel(double* blockMeans, double* cudaTrials,
                     debug[GID + trial + 1] = gresult.grand2;
                 }
             }
+#endif
             // use gaussian random number (standard normal distributed)
             else {
                 gresult = gaussrand (&localState);
@@ -117,40 +123,50 @@ __device__ void trunc(double* target) {
         *target = 0.0;
 }
 
+#ifdef __GOGO_DEBUG__
 __global__ void black_scholes_variance_kernel(const long M, const double mean,
             double* cudaTrials, double* cudaVariances, double* debug) {
-    
-    __shared__ double variances[WINDOW_WIDTH];
-    
-    long gId = (blockIdx.x * WINDOW_WIDTH) + threadIdx.x;
-    unsigned int tId = threadIdx.x;
-    
-    variances[tId] = cudaTrials[gId];
-    variances[tId] = variances[tId] - mean;
+#else
+__global__ void black_scholes_variance_kernel(const long M, const double mean,
+            double* cudaTrials, double* cudaVariances) {
+#endif
 
-    // Meaningless value such as 1.1E-15 could lead invalid result
-    // when number of trial is so high. Thus, truncate all after the 10th
-    // decimal place. Even though we truncate them, the result still in
-    // acceptable valid range
-    trunc(&variances[tId]);
+        __shared__ double variances[WINDOW_WIDTH];
+    
+    const long LOOP_SIZE = (long)1 < (M / (BLOCK_SIZE * WINDOW_WIDTH)) ? M / (BLOCK_SIZE * WINDOW_WIDTH) : 1;
+    const unsigned int GID = (blockIdx.x * blockDim.x) * LOOP_SIZE + threadIdx.x * LOOP_SIZE;
+    const unsigned int TID = threadIdx.x;
 
-    variances[tId] = (variances[tId] *  variances[tId]) / (double)(M-1);
-    debug[gId] = cudaTrials[gId];
+    // Do the Black-Scholes iterations
+    variances[TID] = 0;
+    for(long trial = 0; trial < LOOP_SIZE; trial++) {
+        double v = cudaTrials[GID + trial];
+        v = v - mean;
+        trunc(&v);
 
+        variances[TID] += (v *  v) / (double)(M-1);
+#ifdef __GOGO_DEBUG__
+        debug[GID + trial] = v;
+#endif
+    }
+    
     for(unsigned int stride = WINDOW_WIDTH>>1; stride > 0; stride >>= 1) {
         __syncthreads();
-        if (stride > tId)
-            variances[tId] += variances[tId + stride];
+        if (stride > TID)
+            variances[TID] += variances[TID + stride];
     }
 
-    if(tId == 0) {
+    if(TID == 0) {
         cudaVariances[blockIdx.x] = variances[0];
     }
 }
 
+#ifdef __GOGO_DEBUG__
 Result black_scholes(double* cudafixedRands, BSConfig config) {
+#else
+Result black_scholes(BSConfig config) {
+#endif
     Result result;
-
     double* means = new double[config.totalNumOfBlocks()];
     double conf_width = 0.0;
 	double t1, t2;
@@ -179,15 +195,19 @@ Result black_scholes(double* cudafixedRands, BSConfig config) {
     
     double* cudaTrials;
     cutilSafeCall(cudaMalloc((void**) &cudaTrials, size));
-
+#ifdef __GOGO_DEBUG__
     double* hostDebug = new double[config.M];
     double* cudaDebug;
     cutilSafeCall(cudaMalloc((void**) &cudaDebug, size));
 
     black_scholes_kernel<<<dimGrid, dimBlock>>>(blockMeans, cudaTrials, randStates, cudafixedRands, cudaDebug, config);
+#else
+    black_scholes_kernel<<<dimGrid, dimBlock>>>(blockMeans, cudaTrials, randStates, config);
+#endif
 
     cutilSafeCall(cudaMemcpy(means, blockMeans, config.totalNumOfBlocks() * sizeof(double), cudaMemcpyDeviceToHost));
 
+#ifdef __GOGO_DEBUG__
     if (config.DEBUG_LEVEL == 2) {
         cudaMemcpy(hostDebug, cudaDebug, size, cudaMemcpyDeviceToHost);
         for (int i = 0; i < config.M; i++) {
@@ -212,6 +232,7 @@ Result black_scholes(double* cudafixedRands, BSConfig config) {
 
         delete [] t;
     }
+#endif
 
 	t2 = get_seconds();
 	result.black_sholes_kernel_time = t2 - t1;
@@ -238,54 +259,70 @@ Result black_scholes(double* cudafixedRands, BSConfig config) {
     result.max = result.mean + conf_width;
 
     /* clean up */
+#ifdef __GOGO_DEBUG__
     cudaFree(cudaDebug);
+#endif
     cudaFree(cudaTrials);
     cudaFree(blockMeans);
     cudaFree(randStates);
 
+#ifdef __GOGO_DEBUG__
     if(hostDebug != NULL) delete [] hostDebug;
+#endif
     if(means != NULL) delete [] means;
 
     return result;
 }
 
 double black_scholes_stddev (const double mean, BSConfig config, double* cudaTrials) {
-    double* variances = new double[config.M/WINDOW_WIDTH];
+    double* variances = new double[config.totalNumOfBlocks()];
     double* cudaVariances;
-    cutilSafeCall(cudaMalloc((void**) &cudaVariances, (config.M/WINDOW_WIDTH) * sizeof(double)));
+    cutilSafeCall(cudaMalloc((void**) &cudaVariances, (config.totalNumOfBlocks()) * sizeof(double)));
 
-    dim3 dimGrid(config.M/WINDOW_WIDTH);
+    dim3 dimGrid(config.totalNumOfBlocks());
     dim3 dimBlock(WINDOW_WIDTH);
 
+    double variance = 0.0;
+#ifdef __GOGO_DEBUG__
     double* debug = new double[config.M];
 
     double* cudaDebug;
     cutilSafeCall(cudaMalloc((void**) &cudaDebug, config.M * sizeof(double)));
     black_scholes_variance_kernel<<<dimGrid, dimBlock>>>(config.M, mean, cudaTrials, cudaVariances, cudaDebug);
 
-    cutilSafeCall(cudaMemcpy(variances, cudaVariances, (config.M/WINDOW_WIDTH) * sizeof(double), cudaMemcpyDeviceToHost));
+    cutilSafeCall(cudaMemcpy(variances, cudaVariances, config.totalNumOfBlocks() * sizeof(double), cudaMemcpyDeviceToHost));
     cutilSafeCall(cudaMemcpy(debug, cudaDebug, config.M * sizeof(double), cudaMemcpyDeviceToHost));
-
-    double variance = 0.0;
-    for(long idx=0; idx<config.M/WINDOW_WIDTH; idx++) {
-        if(config.DEBUG_LEVEL == 2)
-            cout << "VARI[" << idx << "]: " << variances[idx] << endl;
-        variance += variances[idx];
-    }
-    cout << endl;
 
     for(long idx=0; idx<config.M; idx++) {
         if(config.DEBUG_LEVEL == 2) {
             if(idx < 10 || idx > (config.M - 10))
-                cout << "TRI[" << idx << "]: " << debug[idx] << endl;
+                cout << "THR_VAR[" << idx << "]: " << debug[idx] << endl;
         }
     }
+    cout << endl;
 
     cudaFree(cudaDebug);
+    delete [] debug;
+#else
+    black_scholes_variance_kernel<<<dimGrid, dimBlock>>>(config.M, mean, cudaTrials, cudaVariances);
+#endif
+
+    cutilSafeCall(cudaMemcpy(variances, cudaVariances, config.totalNumOfBlocks() * sizeof(double), cudaMemcpyDeviceToHost));
+
+    for(long idx=0; idx<config.totalNumOfBlocks(); idx++) {
+#ifdef __GOGO_DEBUG__
+       if(config.DEBUG_LEVEL == 2)
+           cout << "BLK_VARI[" << idx << "]: " << variances[idx] << endl;
+#endif
+       variance += variances[idx];
+   }
+#ifdef __GOGO_DEBUG__
+   cout << endl;
+#endif
+
     cudaFree(cudaVariances);
 
     delete [] variances;
-    delete [] debug;
-    
+
     return sqrt(variance);
 }

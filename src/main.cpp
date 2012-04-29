@@ -36,8 +36,20 @@ using namespace std;
  * 0, or nothing: return Gaussian Number (Standard Normal Distributed Random Number)
  * 1: Test purpose generator. Always returns 1
  * 2: Test purpose generator. It returns one element from pre-generated sequence
+ *    To run program under this mode, un-comment below line in Makefile
+ *
+ *    #FLAG = -D__GOGO_DEBUG__
+ *
+ *    Then, compile again.
  *
  * [Debug Flag] print out with debug mode
+ * 0: Default. No show any additional information
+ * 1: Show consumed time to process each major parts
+ * 2: Verbose mode. To run program under this mode, un-comment below line in Makefile
+ *
+ *    #FLAG = -D__GOGO_DEBUG__
+ *
+ *    Then, compile again.
  */
 int main(int argc, char* argv[]) {
     BSConfig config;
@@ -58,21 +70,30 @@ int main(int argc, char* argv[]) {
 
     if (argv[3] != NULL) {
         config.RND_MODE = to_int(argv[3]);
+#ifdef __GOGO_DEBUG__
 		if (config.RND_MODE > 2) {
-			cerr << "Available mode: [0], [1], [2]" << endl << endl;
+			cerr << "Available Random Mode: [0], [1], [2]" << endl << endl;
 			exit(EXIT_FAILURE);
 		}
+#else
+		if (config.RND_MODE > 1) {
+            cerr << "Available Random Mode: [0], [1]" << endl << endl;
+            exit(EXIT_FAILURE);
+        }
+#endif
     }
 
 	if (argv[4] != NULL) {
 		config.DEBUG_LEVEL = to_int(argv[4]);
 		if (config.DEBUG_LEVEL > 2) {
-			cout << "Only three debug mode are possible[0][1][2], So, automatically set as 0" << endl;
+			cout << "Only two debug mode are possible[0][1], default is 0. Thus set as 0" << endl;
 			config.DEBUG_LEVEL = 0;
 		} else if (config.DEBUG_LEVEL == 1) {
-			cout << "Debug mode 1 ON" << endl;
-		} else if (config.DEBUG_LEVEL == 2){
-		    cout << "Debug mode 2 ON, Generated Random Numbers[0~M] are below" << endl;
+#ifdef __GOGO_DEBUG__
+			cout << "Verbose Debug Mode ON" << endl;
+#else
+			cout << "Debug Mode ON" << endl;
+#endif
 		}
 	}
 
@@ -91,6 +112,7 @@ int main(int argc, char* argv[]) {
 		config.M = WINDOW_WIDTH;
 	}
 
+#ifdef __GOGO_DEBUG__
 	// pre-generated fixed numbers as random for correctness test : mode[2]
 	double* fixedRands = new double[config.M];
 	double* cudafixedRands;
@@ -100,6 +122,7 @@ int main(int argc, char* argv[]) {
 
     cutilSafeCall(cudaMalloc((void**) &cudafixedRands, config.M*sizeof(double)));
     cutilSafeCall(cudaMemcpy(cudafixedRands, fixedRands, config.M*sizeof(double), cudaMemcpyHostToDevice));
+#endif
 
     t1 = get_seconds();
     /*
@@ -107,7 +130,12 @@ int main(int argc, char* argv[]) {
      * the max of all the prng_stream_spawn_times, or just take a representative
      * sample...
      */
+
+#ifdef __GOGO_DEBUG__
     Result result = black_scholes(cudafixedRands, config);
+#else
+    Result result = black_scholes(config);
+#endif
     //Result result = black_scholes(S, E, r, sigma, T, M, mode, cudafixedRands, debug_mode, config);
 
     t2 = get_seconds();
@@ -136,14 +164,17 @@ int main(int argc, char* argv[]) {
     cout.precision(10);
     cout << "Overall Simulation Time     : " << t2 - t1 << " seconds" << endl;
 
-    if(config.DEBUG_LEVEL == 1) {
+    if(config.DEBUG_LEVEL > 0) {
         cout << "Random streams Initializing : " << result.init_seeds_setup_time << " seconds" << endl;
         cout << "Black Scholes Kernel        : " << result.black_sholes_kernel_time << " seconds" << endl;
         cout << "Standard Deviation Kernel   : " << result.calc_stddev_time << " seconds" << endl;
     }
 
+#ifdef __GOGO_DEBUG__
 	cudaFree (cudafixedRands);
 	if(fixedRands != NULL) delete [] fixedRands;
+#endif
+
     return 0;
 }
 

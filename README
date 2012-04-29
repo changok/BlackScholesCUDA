@@ -1,1 +1,35 @@
-
+/**
+ * Usage: ./blackScholes <filename> [Trials(M)] [Random Mode] [Debug Flag]
+ *
+ * <filename> (don't include the angle brackets) is the name of 
+ * a data file in the current directory containing the parameters
+ * for the Black-Scholes simulation.  It has exactly six lines 
+ * with no white space.  Put each parameter one to a line, with
+ * an endline after it.  Here are the parameters:
+ *
+ * S
+ * E
+ * r
+ * sigma
+ * T
+ *
+ * [Random Type] (don't include the brackets) is used for specify random
+ * number generator type. It can be omitted.
+ * 0, or nothing: return Gaussian Number (Standard Normal Distributed Random Number)
+ * 1: Test purpose generator. Always returns 1
+ * 2: Test purpose generator. It returns one element from pre-generated sequence
+ *    To run program under this mode, un-comment below line in Makefile
+ *
+ *    #FLAG = -D__GOGO_DEBUG__
+ *
+ *    Then, compile again.
+ *
+ * [Debug Flag] print out with debug mode
+ * 0: Default. No show any additional information
+ * 1: Show consumed time to process each major parts
+ * 2: Verbose mode. To run program under this mode, un-comment below line in Makefile
+ *
+ *    #FLAG = -D__GOGO_DEBUG__
+ *
+ *    Then, compile again.
+ */
