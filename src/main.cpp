@@ -152,30 +152,34 @@ int main(int argc, char* argv[]) {
      * double quotes) is that the C preprocessor automatically
      * concatenates them if they are separated only by whitespace.
      */
-
-    cout << "Black-Scholes in GPU benchmark :" << endl
-            << "------------------------" << endl
-            << "S        " << config.S << endl
-            << "E        " << config.E << endl
-            << "r        " << config.r << endl
-            << "sigma    " << config.sigma << endl
-			<< "T        " << config.T << endl
-			<< "M        " << config.M << endl;
+	cout << "Black-Scholes in GPU benchmark:" << endl;
+//            << "------------------------" << endl
+       //     << "S        " << config.S << endl
+            //<< "E        " << config.E << endl
+            //<< "r        " << config.r << endl
+            //<< "sigma    " << config.sigma << endl
+            //<< "T        " << config.T << endl
+            //<< "M        " << config.M << endl;
 
     cout.precision(7);
-    cout << endl;
-    cout << "Mean: " << result.mean << endl;
-    cout << "Standard Deviation: " << result.stddev << endl;
-    cout << "Confidence interval: [" << result.min << ", " << result.max << "]" << endl;
+    cout << "----------------------------------------" << endl
+         << "Trials                            : " << config.M << endl
+         << "Confidence interval: (" << result.min << ", " << result.max << ")" << endl
+         << "Arverage Trials(BS)               : " << result.mean << endl
+         << "Standard Deviation                : " << result.stddev << endl
+         << "----------------------------------------" << endl;
 
     cout.precision(10);
-    cout << "Overall Simulation Time     : " << t2 - t1 << " seconds" << endl;
+    cout << "Total Simulation Time(sec)        : " << t2 - t1 << endl
+         << "PRNG stream spawn(init) time(sec) : " << result.init_seeds_setup_time << endl
+         << "Black Scholes Kernel(sec)         : " << result.black_sholes_kernel_time << endl
+         << "Standard Deviation Kernel(sec)    : " << result.calc_stddev_time << endl;
 
-    if(config.DEBUG_LEVEL > 0) {
+/*    if(config.DEBUG_LEVEL > 0) {
         cout << "Random streams Initializing : " << result.init_seeds_setup_time << " seconds" << endl;
         cout << "Black Scholes Kernel        : " << result.black_sholes_kernel_time << " seconds" << endl;
         cout << "Standard Deviation Kernel   : " << result.calc_stddev_time << " seconds" << endl;
-    }
+    }*/
 
 #ifdef __GOGO_DEBUG__
 	cudaFree (cudafixedRands);
