@@ -64,7 +64,6 @@ int main(int argc, char* argv[]) {
     parse_parameters(&config, filename);
 
     if (argv[2] != NULL) {
-	  cout << "Number of Trials[M] : " << argv[2] << endl;
 	  config.M = to_long(argv[2]);
     }
 
@@ -154,12 +153,12 @@ int main(int argc, char* argv[]) {
      */
 	cout << "Black-Scholes in GPU benchmark:" << endl;
 //            << "------------------------" << endl
-       //     << "S        " << config.S << endl
-            //<< "E        " << config.E << endl
-            //<< "r        " << config.r << endl
-            //<< "sigma    " << config.sigma << endl
-            //<< "T        " << config.T << endl
-            //<< "M        " << config.M << endl;
+//            << "S        " << config.S << endl
+//            << "E        " << config.E << endl
+//            << "r        " << config.r << endl
+//            << "sigma    " << config.sigma << endl
+//            << "T        " << config.T << endl
+//            << "M        " << config.M << endl;
 
     cout.precision(7);
     cout << "----------------------------------------" << endl
