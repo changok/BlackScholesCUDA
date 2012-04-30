@@ -44,13 +44,30 @@ cuda_65536_run:
 		$(BIN_DIR)/$(HW1_EXE) $(PARAM) 65536 0; \
 		((number = number + 1)) ; \
 	done
+cuda_131072_run:
+	number=1 ; while [[ $$number -le 10 ]] ; \
+	do \
+		$(BIN_DIR)/$(HW1_EXE) $(PARAM) 131072 0; \
+		((number = number + 1)) ; \
+	done
+cuda_8388608_run:
+	number=1 ; while [[ $$number -le 10 ]] ; \
+	do \
+		$(BIN_DIR)/$(HW1_EXE) $(PARAM) 8388608 0; \
+		((number = number + 1)) ; \
+	done
 cuda_17367040_run:
 	number=1 ; while [[ $$number -le 10 ]] ; \
 	do \
 		$(BIN_DIR)/$(HW1_EXE) $(PARAM) 17367040 0; \
 		((number = number + 1)) ; \
 	done
-
+cuda_exceed_run:
+	number=1 ; while [[ $$number -le 10 ]] ; \
+	do \
+		$(BIN_DIR)/$(HW1_EXE) $(PARAM) 67108864 0; \
+		((number = number + 1)) ; \
+	done
 corr_fixed:
 	for number in 256 4096 65536 17367040; do \
 		$(BIN_DIR)/$(HW1_EXE) $(PARAM) $$number 2; \

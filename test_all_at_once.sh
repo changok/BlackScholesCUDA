@@ -18,7 +18,10 @@ function test_cuda_all {
 	echo location:$locate
 	make cuda_4096_run > $locate/test_cuda_$t1\_$tag
 	make cuda_65536_run > $locate/test_cuda_$t2\_$tag
-	make cuda_17367040_run > $locate/test_cuda_$t3\_$tag
+	make cuda_131072_run > $locate/test_cuda_131072\_$tag
+	make cuda_8388608_run > $locate/test_cuda_8388608\_$tag
+	make cuda_17367040_run > $locate/test_cuda_17367040\_$tag
+	make cuda_exceed_run > $locate/test_cuda_67108864\_$tag
 }
 
 test_cuda_all
